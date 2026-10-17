@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Forum BSiAW</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
+    input, textarea { width: 100%; padding: 6px; margin: 4px 0 10px; box-sizing: border-box; }
+    button { padding: 6px 14px; }
+    .post { border-bottom: 1px solid #ccc; padding: 8px 0; }
+    .meta { color: #666; font-size: 12px; }
+    .flash { background: #fff3cd; padding: 8px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Forum BSiAW</h1>
+  {% if session.username %}
+    <p>Zalogowany jako <b>{{ session.username }}</b> | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
+  {% endif %}
+
+  {% for msg in get_flashed_messages() %}
+    <div class="flash">{{ msg }}</div>
+  {% endfor %}
+
+  {% block content %}{% endblock %}
+</body>
+</html>
