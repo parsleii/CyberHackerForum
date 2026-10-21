@@ -187,9 +187,35 @@ def make_admin(username):
     print(f"Użytkownik '{username}' jest teraz administratorem.")
 
 
-# Utworzenie tabel przy starcie (jeśli jeszcze nie istnieją)
+def upgrade_db():
+    """Dopisuje kolumnę is_admin do tabeli user, jeśli baza jest ze starej wersji aplikacji.
+    create_all() tworzy tylko brakujące TABELE, nie dodaje KOLUMN do istniejących."""
+    columns = [c["name"] for c in db.inspect(db.engine).get_columns("user")]
+    if "is_admin" not in columns:
+        table = db.engine.dialect.identifier_preparer.quote("user")  # "user" to słowo zastrzeżone w Postgresie
+        with db.engine.begin() as conn:
+            conn.execute(db.text(f"ALTER TABLE {table} ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE"))
+        print("Baza zaktualizowana: dodano kolumnę user.is_admin")
+
+
+def promote_admin_from_env():
+    """Nadaje rolę admina użytkownikowi podanemu w zmiennej ADMIN_USERNAME (np. w Cloud Run).
+    Konto musi już istnieć - zakłada się je normalnie przez stronę rejestracji."""
+    username = os.environ.get("ADMIN_USERNAME")
+    if not username:
+        return
+    user = User.query.filter_by(username=username).first()
+    if user and not user.is_admin:
+        user.is_admin = True
+        db.session.commit()
+        print(f"Nadano rolę admina użytkownikowi '{username}'")
+
+
+# Przy starcie: utworzenie brakujących tabel, aktualizacja starej bazy, nadanie roli admina
 with app.app_context():
     db.create_all()
+    upgrade_db()
+    promote_admin_from_env()
 
 
 if __name__ == "__main__":
