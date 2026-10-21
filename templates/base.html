@@ -13,7 +13,9 @@
   </style>
 </head>
 <body>
+  <marquee>
   <h1>CyberHackerForum</h1>
+  </marquee>
   {% if session.username %}
     <p>Zalogowany jako <b>{{ session.username }}</b> | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
   {% endif %}
