@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Użytkownicy</h2>
+<form method="get" action="{{ url_for('users') }}">
+  <input name="q" value="{{ q }}" placeholder="Szukaj po loginie..." style="width:70%">
+  <button type="submit">Szukaj</button>
+  {% if q %}<a href="{{ url_for('users') }}">wyczyść</a>{% endif %}
+</form>
+
+<table>
+  <tr><th>Login</th><th>Rola</th>{% if me.is_admin %}<th>Status</th>{% endif %}</tr>
+  {% for u in users %}
+  <tr>
+    <td><a href="{{ url_for('profile', user_id=u.id) }}">{{ u.username }}</a></td>
+    <td>{{ "admin" if u.is_admin else "użytkownik" }}</td>
+    {% if me.is_admin %}
+    <td>
+      {% if u.banned_permanent %}ban permanentny
+      {% elif u.ban_active() %}ban do {{ u.banned_until.strftime('%Y-%m-%d %H:%M') }} UTC
+      {% else %}aktywny{% endif %}
+    </td>
+    {% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="3">Brak użytkowników pasujących do „{{ q }}”.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

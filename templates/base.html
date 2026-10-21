@@ -14,12 +14,18 @@
     .comment { border-left: 2px solid #ddd; padding: 4px 8px; margin-bottom: 6px; }
     .comments input { width: 70%; }
     .inline { display: inline; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; font-size: 14px; }
+    select { padding: 4px; }
   </style>
 </head>
 <body>
   <marquee><h1>CyberHackerForum</h1></marquee>
   {% if me %}
-    <p>Zalogowany jako <b>{{ me.username }}</b>{% if me.is_admin %} (admin){% endif %} | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
+    <p>Zalogowany jako <a href="{{ url_for('profile', user_id=me.id) }}"><b>{{ me.username }}</b></a>{% if me.is_admin %} (admin){% endif %}
+      | <a href="{{ url_for('forum') }}">Forum</a>
+      | <a href="{{ url_for('users') }}">Użytkownicy</a>
+      | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
   {% endif %}
 
   {% for msg in get_flashed_messages() %}

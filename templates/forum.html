@@ -9,13 +9,19 @@
 <h2>Posty</h2>
 {% for post in posts %}
   <div class="post">
-    <div class="meta">{{ post.author.username }} — {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
-    <div>{{ post.content }}</div>
+    <div class="meta"><a href="{{ url_for('profile', user_id=post.author.id) }}">{{ post.author.username }}</a> — {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+    <div>{{ post.content }}
+      {% if me.is_admin %}
+        <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" class="inline">
+          <button type="submit">Usuń post</button>
+        </form>
+      {% endif %}
+    </div>
 
     <div class="comments">
       {% for c in post.comments %}
         <div class="comment">
-          <span class="meta">{{ c.author.username }} — {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</span><br>
+          <span class="meta"><a href="{{ url_for('profile', user_id=c.author.id) }}">{{ c.author.username }}</a> — {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</span><br>
           {{ c.content }}
           {% if me.is_admin %}
             <form method="post" action="{{ url_for('delete_comment', comment_id=c.id) }}" class="inline">

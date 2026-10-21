@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import click
@@ -10,13 +10,28 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 
 # Klucz do podpisywania ciasteczka sesji. Lokalnie wystarczy wartość domyślna,
-# w chmurze ustawimy go przez zmienną środowiskową.
+# w chmurze ustawiamy go przez zmienną środowiskową SECRET_KEY.
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-tylko-lokalnie")
 
-# Adres bazy danych. Lokalnie: plik SQLite. W chmurze podmienimy go na Cloud SQL.
+# Adres bazy danych. Lokalnie: plik SQLite. W chmurze można podać inną bazę przez DATABASE_URL.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///forum.db")
 
 db = SQLAlchemy(app)
+
+
+def utcnow():
+    """Aktualny czas UTC bez strefy (tak przechowujemy daty w bazie)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+# Dostępne długości bana (wartość z formularza -> czas trwania, None = na stałe)
+BAN_DURATIONS = {
+    "1h": timedelta(hours=1),
+    "1d": timedelta(days=1),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "perm": None,
+}
 
 
 # ---------- MODELE (tabele w bazie) ----------
@@ -25,16 +40,30 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False, nullable=False)  # rola moderatora
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)          # rola moderatora
+    banned_until = db.Column(db.DateTime, nullable=True)                     # ban czasowy (do kiedy, UTC)
+    banned_permanent = db.Column(db.Boolean, default=False, nullable=False)  # ban na stałe
+
+    def ban_active(self):
+        """Czy trwa ban czasowy."""
+        return self.banned_until is not None and self.banned_until > utcnow()
+
+    def is_banned(self):
+        return self.banned_permanent or self.ban_active()
+
+    def ban_message(self):
+        if self.banned_permanent:
+            return "Twoje konto zostało zablokowane na stałe."
+        return f"Twoje konto jest zablokowane do {self.banned_until.strftime('%Y-%m-%d %H:%M')} UTC."
 
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     author = db.relationship("User")
-    # komentarze pod postem, posortowane od najstarszego
+    # komentarze pod postem; usunięcie posta usuwa też jego komentarze
     comments = db.relationship("Comment", backref="post", order_by="Comment.created_at",
                                cascade="all, delete-orphan")
 
@@ -42,7 +71,7 @@ class Post(db.Model):
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
     author = db.relationship("User")
@@ -51,14 +80,19 @@ class Comment(db.Model):
 # ---------- POMOCNICZE ----------
 
 def current_user():
-    """Zwraca zalogowanego użytkownika pobranego z bazy (albo None)."""
+    """Zwraca zalogowanego użytkownika z bazy (albo None).
+    Zbanowany użytkownik jest od razu wylogowywany - ban działa także na otwarte sesje."""
     if "user_id" not in session:
         return None
-    return db.session.get(User, session["user_id"])
+    user = db.session.get(User, session["user_id"])
+    if user is None or user.is_banned():
+        session.clear()
+        return None
+    return user
 
 
 def login_required(view):
-    """Dekorator: wpuszcza tylko zalogowanych."""
+    """Dekorator: wpuszcza tylko zalogowanych (i niezbanowanych)."""
     @wraps(view)
     def wrapped(*args, **kwargs):
         if current_user() is None:
@@ -99,9 +133,12 @@ def register():
         username = request.form["username"].strip()
         password = request.form["password"]
 
+        # Sprawdzenie bez rozróżniania wielkości liter: "Admin" i "admin" to ten sam login
+        taken = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+
         if not username or not password:
             flash("Podaj login i hasło.")
-        elif User.query.filter_by(username=username).first():
+        elif taken:
             flash("Taki użytkownik już istnieje.")
         else:
             user = User(username=username, password_hash=generate_password_hash(password))
@@ -119,6 +156,9 @@ def login():
         user = User.query.filter_by(username=request.form["username"].strip()).first()
 
         if user and check_password_hash(user.password_hash, request.form["password"]):
+            if user.is_banned():
+                flash(user.ban_message())
+                return render_template("login.html")
             session["user_id"] = user.id
             session["username"] = user.username
             return redirect(url_for("forum"))
@@ -162,6 +202,30 @@ def add_comment(post_id):
     return redirect(url_for("forum"))
 
 
+@app.route("/users")
+@login_required
+def users():
+    q = request.args.get("q", "").strip()
+    query = User.query
+    if q:
+        # wyszukiwanie fragmentu loginu bez rozróżniania wielkości liter;
+        # zapytanie jest parametryzowane przez SQLAlchemy, a autoescape sprawia,
+        # że znaki % i _ wpisane przez użytkownika są traktowane dosłownie
+        query = query.filter(db.func.lower(User.username).contains(q.lower(), autoescape=True))
+    return render_template("users.html", users=query.order_by(User.username).all(), q=q)
+
+
+@app.route("/user/<int:user_id>")
+@login_required
+def profile(user_id):
+    user = db.get_or_404(User, user_id)
+    posts = Post.query.filter_by(user_id=user.id).order_by(Post.created_at.desc()).all()
+    comments = Comment.query.filter_by(user_id=user.id).order_by(Comment.created_at.desc()).all()
+    return render_template("profile.html", user=user, posts=posts, comments=comments)
+
+
+# ---------- AKCJE ADMINA ----------
+
 @app.route("/comment/<int:comment_id>/delete", methods=["POST"])
 @admin_required
 def delete_comment(comment_id):
@@ -172,8 +236,52 @@ def delete_comment(comment_id):
     return redirect(url_for("forum"))
 
 
-# ---------- KOMENDA DO NADANIA ROLI ADMINA ----------
-# Użycie w terminalu:  flask --app app make-admin <login>
+@app.route("/post/<int:post_id>/delete", methods=["POST"])
+@admin_required
+def delete_post(post_id):
+    post = db.get_or_404(Post, post_id)
+    db.session.delete(post)  # komentarze usuwane razem z postem (cascade)
+    db.session.commit()
+    flash("Post usunięty razem z komentarzami.")
+    return redirect(url_for("forum"))
+
+
+@app.route("/admin/user/<int:user_id>/ban", methods=["POST"])
+@admin_required
+def ban_user(user_id):
+    user = db.get_or_404(User, user_id)
+    if user.is_admin:
+        abort(400)  # admina nie można zbanować (także samego siebie)
+
+    duration = request.form.get("duration")
+    if duration not in BAN_DURATIONS:
+        abort(400)
+
+    if BAN_DURATIONS[duration] is None:
+        user.banned_permanent = True
+        user.banned_until = None
+        flash(f"Użytkownik {user.username} zbanowany na stałe.")
+    else:
+        user.banned_permanent = False
+        user.banned_until = utcnow() + BAN_DURATIONS[duration]
+        flash(f"Użytkownik {user.username} zbanowany do {user.banned_until.strftime('%Y-%m-%d %H:%M')} UTC.")
+    db.session.commit()
+    return redirect(url_for("profile", user_id=user.id))
+
+
+@app.route("/admin/user/<int:user_id>/unban", methods=["POST"])
+@admin_required
+def unban_user(user_id):
+    user = db.get_or_404(User, user_id)
+    user.banned_permanent = False
+    user.banned_until = None
+    db.session.commit()
+    flash(f"Użytkownik {user.username} odbanowany.")
+    return redirect(url_for("profile", user_id=user.id))
+
+
+# ---------- KOMENDA DO NADANIA ROLI ADMINA (lokalnie) ----------
+# Użycie w terminalu:  python -m flask --app app make-admin <login>
 
 @app.cli.command("make-admin")
 @click.argument("username")
@@ -187,15 +295,26 @@ def make_admin(username):
     print(f"Użytkownik '{username}' jest teraz administratorem.")
 
 
+# ---------- START APLIKACJI ----------
+
+# Kolumny dodane w nowszych wersjach aplikacji: nazwa -> definicja SQL
+NEW_USER_COLUMNS = {
+    "is_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "banned_until": "TIMESTAMP NULL",
+    "banned_permanent": "BOOLEAN NOT NULL DEFAULT FALSE",
+}
+
+
 def upgrade_db():
-    """Dopisuje kolumnę is_admin do tabeli user, jeśli baza jest ze starej wersji aplikacji.
+    """Dopisuje brakujące kolumny do tabeli user, jeśli baza jest ze starszej wersji aplikacji.
     create_all() tworzy tylko brakujące TABELE, nie dodaje KOLUMN do istniejących."""
-    columns = [c["name"] for c in db.inspect(db.engine).get_columns("user")]
-    if "is_admin" not in columns:
-        table = db.engine.dialect.identifier_preparer.quote("user")  # "user" to słowo zastrzeżone w Postgresie
-        with db.engine.begin() as conn:
-            conn.execute(db.text(f"ALTER TABLE {table} ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE"))
-        print("Baza zaktualizowana: dodano kolumnę user.is_admin")
+    existing = [c["name"] for c in db.inspect(db.engine).get_columns("user")]
+    table = db.engine.dialect.identifier_preparer.quote("user")  # "user" to słowo zastrzeżone w Postgresie
+    with db.engine.begin() as conn:
+        for name, definition in NEW_USER_COLUMNS.items():
+            if name not in existing:
+                conn.execute(db.text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+                print(f"Baza zaktualizowana: dodano kolumnę user.{name}")
 
 
 def promote_admin_from_env():
@@ -211,7 +330,6 @@ def promote_admin_from_env():
         print(f"Nadano rolę admina użytkownikowi '{username}'")
 
 
-# Przy starcie: utworzenie brakujących tabel, aktualizacja starej bazy, nadanie roli admina
 with app.app_context():
     db.create_all()
     upgrade_db()
