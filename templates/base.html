@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
   <meta charset="utf-8">
-  <title>Forum BSiAW</title>
+  <title>CyberHackerForum</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
     input, textarea { width: 100%; padding: 6px; margin: 4px 0 10px; box-sizing: border-box; }
@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <h1>Forum BSiAW</h1>
+  <marquee><h1>CyberHackerForum</h1></marquee>
   {% if me %}
     <p>Zalogowany jako <b>{{ me.username }}</b>{% if me.is_admin %} (admin){% endif %} | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
   {% endif %}
