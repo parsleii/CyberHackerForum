@@ -10,12 +10,16 @@
     .post { border-bottom: 1px solid #ccc; padding: 8px 0; }
     .meta { color: #666; font-size: 12px; }
     .flash { background: #fff3cd; padding: 8px; margin-bottom: 10px; }
+    .comments { margin: 8px 0 0 24px; }
+    .comment { border-left: 2px solid #ddd; padding: 4px 8px; margin-bottom: 6px; }
+    .comments input { width: 70%; }
+    .inline { display: inline; }
   </style>
 </head>
 <body>
   <h1>Forum BSiAW</h1>
-  {% if session.username %}
-    <p>Zalogowany jako <b>{{ session.username }}</b> | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
+  {% if me %}
+    <p>Zalogowany jako <b>{{ me.username }}</b>{% if me.is_admin %} (admin){% endif %} | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
   {% endif %}
 
   {% for msg in get_flashed_messages() %}

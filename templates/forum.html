@@ -1,18 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Dodaj wpis</h2>
-<form method="post">
+<h2>Nowy post</h2>
+<form method="post" action="{{ url_for('add_post') }}">
   <textarea name="content" rows="3" required></textarea>
-  <button type="submit">Wyślij</button>
+  <button type="submit">Opublikuj</button>
 </form>
 
-<h2>Wpisy</h2>
+<h2>Posty</h2>
 {% for post in posts %}
   <div class="post">
     <div class="meta">{{ post.author.username }} — {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
     <div>{{ post.content }}</div>
+
+    <div class="comments">
+      {% for c in post.comments %}
+        <div class="comment">
+          <span class="meta">{{ c.author.username }} — {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</span><br>
+          {{ c.content }}
+          {% if me.is_admin %}
+            <form method="post" action="{{ url_for('delete_comment', comment_id=c.id) }}" class="inline">
+              <button type="submit">Usuń</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <form method="post" action="{{ url_for('add_comment', post_id=post.id) }}">
+        <input name="content" placeholder="Napisz komentarz..." required>
+        <button type="submit">Komentuj</button>
+      </form>
+    </div>
   </div>
 {% else %}
-  <p>Brak wpisów. Bądź pierwszy!</p>
+  <p>Brak postów. Bądź pierwszy!</p>
 {% endfor %}
 {% endblock %}
