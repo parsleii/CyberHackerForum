@@ -8,18 +8,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
-# Klucz do podpisywania ciasteczka sesji. Lokalnie wystarczy wartość domyślna,
-# w chmurze (L3/L4) ustawimy go przez zmienną środowiskową.
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-tylko-lokalnie")
 
-# Adres bazy danych. Lokalnie: plik SQLite. W chmurze podmienimy go na Cloud SQL
-# (np. postgresql://user:haslo@host/db) bez zmiany reszty kodu.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///forum.db")
 
 db = SQLAlchemy(app)
 
 
-# ---------- MODELE (tabele w bazie) ----------
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,7 +30,6 @@ class Post(db.Model):
     author = db.relationship("User")
 
 
-# ---------- POMOCNICZE ----------
 
 def login_required(view):
     """Dekorator: wpuszcza tylko zalogowanych (czyli tych, którzy mają user_id w sesji)."""
@@ -47,7 +41,6 @@ def login_required(view):
     return wrapped
 
 
-# ---------- WIDOKI (adresy URL) ----------
 
 @app.route("/")
 def index():
@@ -109,7 +102,6 @@ def forum():
     return render_template("forum.html", posts=posts)
 
 
-# Utworzenie tabel przy starcie (jeśli jeszcze nie istnieją)
 with app.app_context():
     db.create_all()
 
