@@ -1,0 +1,252 @@
+:root {
+--green: #00ff66;         /* Neonowy hakerski zielony /
+--green-dark: #008033;    / Ciemniejsza zielona baza */
+--green-glow: rgba(0, 255, 102, 0.25);
+
+--crust-dark: #3a2211;    /* Przypalony brzeg pizzy /
+--sauce-dark: #3d0c0c;    / Mroczny czerwony akcent */
+
+--bg-color: #0d1117;      /* Ciemne hakerskie tło /
+--card-bg: #161b22;       / Tło dla kart/postów */
+--card-border: #30363d;
+
+--text-main: #e6edf3;     /* Jasny, czytelny tekst */
+--text-muted: #8b949e;
+
+--shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+--neon-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+}
+
+body {
+font-family: 'Consolas', 'Courier New', monospace, sans-serif;
+max-width: 800px;
+margin: 0 auto;
+padding: 20px;
+color: var(--text-main);
+background-color: var(--bg-color);
+
+/* Mroczna wersja czerwono-zielonej kratki obrusowej w wersji neon/cyber */
+background-image:
+linear-gradient(45deg, rgba(0, 255, 102, 0.03) 25%, transparent 25%),
+linear-gradient(-45deg, rgba(0, 255, 102, 0.03) 25%, transparent 25%),
+linear-gradient(45deg, transparent 75%, rgba(0, 255, 102, 0.03) 75%),
+linear-gradient(-45deg, transparent 75%, rgba(0, 255, 102, 0.03) 75%);
+background-size: 30px 30px;
+background-position: 0 0, 0 15px, 15px -15px, -15px 0px;
+}
+
+/* Baner nagłówkowy w stylu hakerskim */
+marquee {
+background: #000;
+color: var(--green);
+padding: 12px 0;
+border-radius: 8px;
+box-shadow: var(--shadow);
+border: 2px solid var(--green);
+margin-bottom: 25px;
+box-shadow: var(--neon-shadow);
+}
+
+marquee h1 {
+margin: 0;
+font-size: 26px;
+font-weight: bold;
+letter-spacing: 3px;
+text-shadow: 0 0 8px var(--green);
+}
+
+marquee h1::before,
+marquee h1::after {
+content: " 🍕 ";
+}
+
+/* Menu nawigacyjne / Zalogowany jako */
+p {
+line-height: 1.6;
+}
+
+body > p:first-of-type {
+background: var(--card-bg);
+padding: 12px 20px;
+border-radius: 8px;
+border-left: 5px solid var(--green);
+border-right: 1px solid var(--card-border);
+border-top: 1px solid var(--card-border);
+border-bottom: 1px solid var(--card-border);
+box-shadow: var(--shadow);
+margin-bottom: 25px;
+}
+
+a {
+color: var(--green);
+font-weight: bold;
+text-decoration: none;
+transition: all 0.2s;
+}
+
+a:hover {
+color: #ffffff;
+text-shadow: 0 0 8px var(--green);
+text-decoration: underline;
+}
+
+/* Nagłówki sekcji */
+h2, h3 {
+color: var(--green);
+border-bottom: 1px dashed var(--green);
+padding-bottom: 6px;
+margin-top: 30px;
+text-shadow: 0 0 4px var(--green-glow);
+}
+
+h2::before {
+content: "> 🍕 ";
+}
+
+/* Formularze i pola edycyjne */
+input, textarea, select {
+width: 100%;
+padding: 10px;
+margin: 6px 0 14px;
+box-sizing: border-box;
+border: 1px solid var(--card-border);
+border-radius: 6px;
+font-size: 14px;
+font-family: inherit;
+background-color: #090d12;
+color: var(--green);
+transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+outline: none;
+border-color: var(--green);
+box-shadow: 0 0 8px var(--green-glow);
+background-color: #0d1117;
+}
+
+/* Przyciski */
+button {
+background: var(--card-bg);
+color: var(--green);
+padding: 8px 18px;
+border: 1px solid var(--green);
+border-radius: 6px;
+font-weight: bold;
+font-family: inherit;
+cursor: pointer;
+box-shadow: var(--shadow);
+transition: all 0.2s;
+}
+
+button:hover {
+background: var(--green);
+color: #000;
+box-shadow: 0 0 12px var(--green);
+transform: translateY(-1px);
+}
+
+button:active {
+transform: translateY(0);
+}
+
+/* Posty jako mroczne karty */
+.post {
+background: var(--card-bg);
+border: 1px solid var(--card-border);
+border-left: 4px solid var(--green);
+border-radius: 8px;
+padding: 16px;
+margin-bottom: 20px;
+box-shadow: var(--shadow);
+}
+
+.meta {
+color: var(--text-muted);
+font-size: 12px;
+margin-bottom: 8px;
+}
+
+/* Komunikaty Flash / Ostrzeżenia */
+.flash {
+background: var(--sauce-dark);
+border: 1px solid #ff4d4d;
+color: #ff9999;
+padding: 12px;
+border-radius: 6px;
+margin-bottom: 15px;
+box-shadow: 0 0 8px rgba(255, 77, 77, 0.2);
+}
+
+/* Sekcja komentarzy */
+.comments {
+margin: 15px 0 0 15px;
+padding-left: 12px;
+border-left: 2px dashed var(--green-dark);
+}
+
+.comment {
+background: #0d1117;
+border: 1px solid var(--card-border);
+border-radius: 6px;
+padding: 8px 12px;
+margin-bottom: 10px;
+}
+
+.comments input {
+width: calc(100% - 110px);
+display: inline-block;
+margin-right: 8px;
+}
+
+.inline {
+display: inline;
+}
+
+.inline button {
+padding: 4px 10px;
+font-size: 12px;
+border-color: #ff4d4d;
+color: #ff4d4d;
+}
+
+.inline button:hover {
+background: #ff4d4d;
+color: #000;
+box-shadow: 0 0 8px #ff4d4d;
+}
+
+/* Tabele (lista użytkowników) */
+table {
+border-collapse: separate;
+border-spacing: 0;
+width: 100%;
+background: var(--card-bg);
+border-radius: 8px;
+border: 1px solid var(--card-border);
+overflow: hidden;
+box-shadow: var(--shadow);
+margin-top: 15px;
+}
+
+th {
+background-color: #0d1117;
+color: var(--green);
+padding: 12px 10px;
+text-align: left;
+border-bottom: 1px solid var(--card-border);
+}
+
+td {
+border-bottom: 1px solid var(--card-border);
+padding: 10px;
+font-size: 14px;
+}
+
+tr:last-child td {
+border-bottom: none;
+}
+
+tr:nth-child(even) {
+background-color: #12161f;
+}

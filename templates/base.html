@@ -3,21 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>CyberHackerForum</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
-    input, textarea { width: 100%; padding: 6px; margin: 4px 0 10px; box-sizing: border-box; }
-    button { padding: 6px 14px; }
-    .post { border-bottom: 1px solid #ccc; padding: 8px 0; }
-    .meta { color: #666; font-size: 12px; }
-    .flash { background: #fff3cd; padding: 8px; margin-bottom: 10px; }
-    .comments { margin: 8px 0 0 24px; }
-    .comment { border-left: 2px solid #ddd; padding: 4px 8px; margin-bottom: 6px; }
-    .comments input { width: 70%; }
-    .inline { display: inline; }
-    table { border-collapse: collapse; width: 100%; }
-    td, th { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; font-size: 14px; }
-    select { padding: 4px; }
-  </style>
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <marquee><h1>CyberHackerForum</h1></marquee>
