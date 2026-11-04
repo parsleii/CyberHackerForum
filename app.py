@@ -1,4 +1,7 @@
+import json
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -12,9 +15,11 @@ from flask import (
     session,
     flash,
     abort,
+    has_request_context,
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+
 
 app = Flask(__name__)
 
@@ -28,6 +33,50 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 
 db = SQLAlchemy(app)
 
+# ---------- LOGI AUDYTOWE ----------
+AUDIT_LOG_FILE = os.environ.get("AUDIT_LOG_FILE", "logs/audit.log")
+os.makedirs(os.path.dirname(AUDIT_LOG_FILE) or ".", exist_ok=True)
+
+audit_logger = logging.getLogger("audit")
+audit_logger.setLevel(logging.INFO)
+audit_logger.propagate = False
+if not audit_logger.handlers:
+    _fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    _fmt.converter = __import__("time").gmtime  # czas w UTC
+    # plik rotowany: max 1 MB, 5 starych kopii (audit.log.1 ... audit.log.5)
+    _file = RotatingFileHandler(AUDIT_LOG_FILE, maxBytes=1_000_000, backupCount=5, encoding="utf-8")
+    _file.setFormatter(_fmt)
+    _console = logging.StreamHandler()
+    _console.setFormatter(_fmt)
+    audit_logger.addHandler(_file)
+    audit_logger.addHandler(_console)
+
+
+def _clean(value):
+    """Zabezpieczenie przed wstrzykiwaniem do logów (log injection):
+    bierze w cudzysłów wartości ze spacjami/znakami specjalnymi i escapuje nowe linie, żeby użytkownik nie mógł podrobić osobnego wpisu w logu,"""
+    text = str(value)
+    if any(ch in text for ch in ' =|"\r\n\t'):
+        # json.dumps dodaje cudzysłowy i zamienia znaki nowej linii na \n
+        text = json.dumps(text, ensure_ascii=False)
+    return text
+
+
+def audit(event, level=logging.INFO, user=None, **details):
+    """Zapisuje jedno zdarzenie audytowe w formacie:
+    czas | poziom | ZDARZENIE user=... ip=... szczegóły..."""
+    if user is None and has_request_context() and "user_id" in session:
+        user = session.get("username")
+    fields = [
+        event,
+        f"user={_clean(user) if user else '-'}",
+        f"ip={request.remote_addr if has_request_context() else '-'}",
+    ]
+    fwd = request.headers.get("X-Forwarded-For") if has_request_context() else None
+    if fwd:
+        fields.append(f"fwd={_clean(fwd)}")  # adres klienta przekazany przez proxy (Cloud Run)
+    fields += [f"{k}={_clean(v)}" for k, v in details.items()]
+    audit_logger.log(level, " ".join(fields))
 
 def utcnow():
     """Aktualny czas UTC bez strefy."""
@@ -93,7 +142,6 @@ class Comment(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
     author = db.relationship("User")
 
-
 # ---------- POMOCNICZE ----------
 
 
@@ -105,6 +153,8 @@ def current_user():
         return None
     user = db.session.get(User, session["user_id"])
     if user is None or user.is_banned():
+        if user is not None:
+            audit("SESSION_TERMINATED_BANNED", logging.WARNING, user=user.username)
         session.clear()
         return None
     return user
@@ -131,6 +181,7 @@ def admin_required(view):
         if user is None:
             return redirect(url_for("login"))
         if not user.is_admin:
+            audit("ACCESS_DENIED", logging.WARNING, user=user.username, path=request.path)
             abort(403)
         return view(*args, **kwargs)
 
@@ -164,14 +215,17 @@ def register():
 
         if not username or not password:
             flash("Podaj login i hasło.")
+            audit("REGISTER_FAIL", logging.WARNING, user=username, reason="empty_fields")
         elif taken:
             flash("Taki użytkownik już istnieje.")
+            audit("REGISTER_FAIL", logging.WARNING, user=username, reason="username_taken")
         else:
             user = User(
                 username=username, password_hash=generate_password_hash(password)
             )
             db.session.add(user)
             db.session.commit()
+            audit("REGISTER_OK", user=user.username, user_id=user.id)
             flash("Konto utworzone, możesz się zalogować.")
             return redirect(url_for("login"))
 
@@ -181,16 +235,21 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = User.query.filter_by(username=request.form["username"].strip()).first()
+        username = request.form["username"].strip()
+        user = User.query.filter_by(username=username).first()
 
         if user and check_password_hash(user.password_hash, request.form["password"]):
             if user.is_banned():
+                audit("LOGIN_BLOCKED_BANNED", logging.WARNING, user=user.username)
                 flash(user.ban_message())
                 return render_template("login.html")
             session["user_id"] = user.id
             session["username"] = user.username
+            audit("LOGIN_OK", user=user.username, admin=user.is_admin)
             return redirect(url_for("forum"))
 
+        audit("LOGIN_FAIL", logging.WARNING, user=username,
+              reason="bad_password" if user else "unknown_user")
         flash("Błędny login lub hasło.")
 
     return render_template("login.html")
@@ -198,6 +257,8 @@ def login():
 
 @app.route("/logout")
 def logout():
+    if "user_id" in session:
+        audit("LOGOUT")
     session.clear()
     return redirect(url_for("login"))
 
@@ -214,8 +275,10 @@ def forum():
 def add_post():
     content = request.form["content"].strip()
     if content:
-        db.session.add(Post(content=content, user_id=session["user_id"]))
+        post = Post(content=content, user_id=session["user_id"])
+        db.session.add(post)
         db.session.commit()
+        audit("POST_CREATE", post_id=post.id, length=len(content))
     return redirect(url_for("forum"))
 
 
@@ -225,10 +288,10 @@ def add_comment(post_id):
     post = db.get_or_404(Post, post_id)
     content = request.form["content"].strip()
     if content:
-        db.session.add(
-            Comment(content=content, user_id=session["user_id"], post_id=post.id)
-        )
+        comment = Comment(content=content, user_id=session["user_id"], post_id=post.id)
+        db.session.add(comment)
         db.session.commit()
+        audit("COMMENT_CREATE", comment_id=comment.id, post_id=post.id, length=len(content))
     return redirect(url_for("forum"))
 
 
@@ -237,6 +300,9 @@ def add_comment(post_id):
 def users():
     q = request.args.get("q", "").strip()
     query = User.query
+    if not current_user().is_admin:
+        # zwykły użytkownik nie widzi kont administratorów na liście ani w wyszukiwarce
+        query = query.filter(User.is_admin.is_(False))
     if q:
         # wyszukiwanie fragmentu loginu bez rozróżniania wielkości liter;
         # zapytanie jest parametryzowane przez SQLAlchemy, a autoescape sprawia,
@@ -267,8 +333,10 @@ def profile(user_id):
 @admin_required
 def delete_comment(comment_id):
     comment = db.get_or_404(Comment, comment_id)
+    author, post_id = comment.author.username, comment.post_id
     db.session.delete(comment)
     db.session.commit()
+    audit("COMMENT_DELETE", comment_id=comment_id, post_id=post_id, author=author)
     flash("Komentarz usunięty.")
     return redirect(url_for("forum"))
 
@@ -277,8 +345,10 @@ def delete_comment(comment_id):
 @admin_required
 def delete_post(post_id):
     post = db.get_or_404(Post, post_id)
+    author, n_comments = post.author.username, len(post.comments)
     db.session.delete(post)  # komentarze usuwane razem z postem (cascade)
     db.session.commit()
+    audit("POST_DELETE", post_id=post_id, author=author, comments_deleted=n_comments)
     flash("Post usunięty razem z komentarzami.")
     return redirect(url_for("forum"))
 
@@ -288,10 +358,12 @@ def delete_post(post_id):
 def ban_user(user_id):
     user = db.get_or_404(User, user_id)
     if user.is_admin:
+        audit("BAN_REJECTED", logging.WARNING, target=user.username, reason="target_is_admin")
         abort(400)  # admina nie można zbanować (także samego siebie)
 
     duration = request.form.get("duration")
     if duration not in BAN_DURATIONS:
+        audit("BAN_REJECTED", logging.WARNING, target=user.username, reason="bad_duration")
         abort(400)
 
     if BAN_DURATIONS[duration] is None:
@@ -305,6 +377,8 @@ def ban_user(user_id):
             f"Użytkownik {user.username} zbanowany do {user.banned_until.strftime('%Y-%m-%d %H:%M')} UTC."
         )
     db.session.commit()
+    audit("BAN", logging.WARNING, target=user.username, duration=duration,
+          until="permanent" if user.banned_permanent else user.banned_until.strftime("%Y-%m-%d %H:%M"))
     return redirect(url_for("profile", user_id=user.id))
 
 
@@ -315,6 +389,7 @@ def unban_user(user_id):
     user.banned_permanent = False
     user.banned_until = None
     db.session.commit()
+    audit("UNBAN", target=user.username)
     flash(f"Użytkownik {user.username} odbanowany.")
     return redirect(url_for("profile", user_id=user.id))
 
@@ -332,6 +407,7 @@ def make_admin(username):
         return
     user.is_admin = True
     db.session.commit()
+    audit("ADMIN_GRANTED", user=username, source="cli")
     print(f"Użytkownik '{username}' jest teraz administratorem.")
 
 
@@ -371,6 +447,7 @@ def promote_admin_from_env():
     if user and not user.is_admin:
         user.is_admin = True
         db.session.commit()
+        audit("ADMIN_GRANTED", user=username, source="env ADMIN_USERNAME")
         print(f"Nadano rolę admina użytkownikowi '{username}'")
 
 
