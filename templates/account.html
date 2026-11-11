@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Moje konto</h2>
+
+<h3>Adres e-mail</h3>
+{% if not me.email %}
+  <div class="flash">Twoje konto nie ma jeszcze adresu e-mail. Podaj go i potwierdź, żeby korzystać z forum i móc odzyskać hasło.</div>
+{% elif not me.email_verified %}
+  <div class="flash">
+    Adres <b>{{ me.email }}</b> czeka na potwierdzenie - kliknij link z maila.
+    <form method="post" action="{{ url_for('resend_my_verification') }}" class="inline">
+      <button type="submit">Wyślij link ponownie</button>
+    </form>
+  </div>
+{% else %}
+  <p>{{ me.email }} (potwierdzony)</p>
+{% endif %}
+<form method="post" action="{{ url_for('set_email') }}">
+  <label>{{ "Zmień e-mail" if me.email else "E-mail" }}</label>
+  <input name="email" type="email" required maxlength="254" autocomplete="email">
+  <button type="submit">Zapisz i wyślij link</button>
+</form>
+
+{% if me.email and me.email_verified %}
+<h3>Zmiana hasła</h3>
+<form method="post" action="{{ url_for('change_password') }}">
+  <label>Obecne hasło</label>
+  <input name="current_password" type="password" required autocomplete="current-password">
+  <label>Nowe hasło</label>
+  <input name="password" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <label>Powtórz nowe hasło</label>
+  <input name="password2" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <p class="meta">Po zmianie hasła wszystkie inne zalogowane sesje zostaną wylogowane, a na e-mail przyjdzie powiadomienie.</p>
+  <button type="submit">Zmień hasło</button>
+</form>
+{% endif %}
+{% endblock %}

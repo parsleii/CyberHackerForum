@@ -17,3 +17,7 @@ venv.bak/
 logs/
 .log
 .log.*
+
+
+# Załączniki (DEV)
+uploads/

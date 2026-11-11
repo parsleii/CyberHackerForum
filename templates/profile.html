@@ -34,6 +34,9 @@
   <div class="post">
     <div class="meta">{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
     <div>{{ post.content }}</div>
+    {% for a in post.attachments %}
+      <div>📎 <a href="{{ url_for('get_file', attachment_id=a.id) }}">{{ a.original_name }}</a></div>
+    {% endfor %}
   </div>
 {% else %}
   <p>Brak postów.</p>

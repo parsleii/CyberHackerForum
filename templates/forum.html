@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Nowy post</h2>
-<form method="post" action="{{ url_for('add_post') }}">
-  <textarea name="content" rows="3" required></textarea>
+<form method="post" action="{{ url_for('add_post') }}" enctype="multipart/form-data">
+  <textarea name="content" rows="3" maxlength="{{ POST_MAX_CHARS }}" placeholder="Treść posta (max {{ POST_MAX_CHARS }} znaków)"></textarea>
+  <label class="meta">Załącznik (opcjonalnie): PNG, JPG, GIF, WEBP, PDF, TXT - max 5 MB</label>
+  <input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt">
   <button type="submit">Opublikuj</button>
 </form>
 
@@ -11,6 +13,13 @@
   <div class="post">
     <div class="meta"><a href="{{ url_for('profile', user_id=post.author.id) }}">{{ post.author.username }}</a> — {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
     <div>{{ post.content }}
+      {% for a in post.attachments %}
+        {% if a.is_image %}
+          <div><img src="{{ url_for('get_file', attachment_id=a.id) }}" alt="{{ a.original_name }}" style="max-width:100%;max-height:400px;margin-top:6px"></div>
+        {% else %}
+          <div>📎 <a href="{{ url_for('get_file', attachment_id=a.id) }}">{{ a.original_name }}</a> <span class="meta">({{ (a.size / 1024)|round(1) }} KB)</span></div>
+        {% endif %}
+      {% endfor %}
       {% if me.is_admin %}
         <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" class="inline">
           <button type="submit">Usuń post</button>
@@ -32,7 +41,7 @@
       {% endfor %}
 
       <form method="post" action="{{ url_for('add_comment', post_id=post.id) }}">
-        <input name="content" placeholder="Napisz komentarz..." required>
+        <input name="content" placeholder="Napisz komentarz... (max {{ COMMENT_MAX_CHARS }} znaków)" required maxlength="{{ COMMENT_MAX_CHARS }}">
         <button type="submit">Komentuj</button>
       </form>
     </div>

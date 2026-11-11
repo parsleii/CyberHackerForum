@@ -3,9 +3,14 @@
 <h2>Rejestracja</h2>
 <form method="post">
   <label>Login</label>
-  <input name="username" required>
+  <input name="username" value="{{ username }}" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_.\-]{3,30}" title="3-30 znaków: litery, cyfry, _ . -">
+  <label>E-mail</label>
+  <input name="email" type="email" value="{{ email }}" required maxlength="254">
   <label>Hasło</label>
-  <input name="password" type="password" required>
+  <input name="password" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <label>Powtórz hasło</label>
+  <input name="password2" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <p class="meta">Hasło: min. {{ PASSWORD_MIN_LEN }} znaków, litera i cyfra i nie może zawierać loginu.</p>
   <button type="submit">Załóż konto</button>
 </form>
 <p>Masz już konto? <a href="{{ url_for('login') }}">Zaloguj się</a></p>

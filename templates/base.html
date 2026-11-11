@@ -12,6 +12,7 @@
     <p>Zalogowany jako <a href="{{ url_for('profile', user_id=me.id) }}"><b>{{ me.username }}</b></a>{% if me.is_admin %} (admin){% endif %}
       | <a href="{{ url_for('forum') }}">Forum</a>
       | <a href="{{ url_for('users') }}">Użytkownicy</a>
+      | <a href="{{ url_for('account') }}">Konto</a>
       | <a href="{{ url_for('logout') }}">Wyloguj</a></p>
   {% endif %}
 

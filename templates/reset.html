@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Ustaw nowe hasło</h2>
+<form method="post" action="{{ url_for('reset_password', token=token) }}">
+  <label>Nowe hasło</label>
+  <input name="password" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <label>Powtórz nowe hasło</label>
+  <input name="password2" type="password" required minlength="{{ PASSWORD_MIN_LEN }}" maxlength="128" autocomplete="new-password">
+  <p class="meta">Min. {{ PASSWORD_MIN_LEN }} znaków, litera i cyfra i nie może zawierać loginu.</p>
+  <button type="submit">Zmień hasło</button>
+</form>
+{% endblock %}

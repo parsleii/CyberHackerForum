@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="post">
+  <label>E-mail podany przy rejestracji</label>
+  <input name="email" type="email" required maxlength="254" autocomplete="email">
+  <button type="submit">{{ button }}</button>
+</form>
+<p><a href="{{ url_for('login') }}">Wróć do logowania</a></p>
+{% endblock %}
